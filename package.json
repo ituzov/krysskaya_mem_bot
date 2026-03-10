@@ -1,0 +1,21 @@
+{
+  "name": "krysskaya_mem_bot",
+  "module": "src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.99.0",
+    "grammy": "^1.41.1",
+    "hono": "^4.12.7"
+  }
+}

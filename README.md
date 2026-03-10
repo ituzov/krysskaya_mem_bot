@@ -2,6 +2,8 @@
 
 Telegram мем-бот с веб-админкой. Кидает рандомные мемы в чат, принимает мемы от юзеров на модерацию.
 
+> Проект целиком на [Bun](https://bun.sh) — runtime, пакетный менеджер, запуск TypeScript без компиляции. Node.js не нужен.
+
 ## Что умеет
 
 - `/kek` — рандомный мем из коллекции
@@ -20,7 +22,12 @@ Telegram мем-бот с веб-админкой. Кидает рандомны
 - **Frontend** — HTMX
 - **Deploy** — Docker + [Dokploy](https://dokploy.com)
 
-## Запуск
+## Требования
+
+- [Bun](https://bun.sh) >= 1.3
+- [Docker](https://docs.docker.com/get-docker/) (для деплоя)
+
+## Запуск локально
 
 ```bash
 bun install
@@ -88,10 +95,14 @@ GRANT ALL ON meme_bot.submissions TO service_role;
 
 ## Docker
 
+В проекте есть `Dockerfile` на базе `oven/bun:1.3.10-alpine`. Образ лёгкий — только production-зависимости и `src/`.
+
 ```bash
 docker build -t krysskaya-mem-bot .
 docker run --env-file .env -p 3000:3000 krysskaya-mem-bot
 ```
+
+Для деплоя через [Dokploy](https://dokploy.com) — подключи репо, пропиши env-переменные, порт `3000`.
 
 ## Структура
 

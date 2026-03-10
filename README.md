@@ -24,32 +24,71 @@ Telegram мем-бот с веб-админкой. Кидает рандомны
 
 ## Требования
 
-- [Bun](https://bun.sh) >= 1.3
+- [Bun](https://bun.sh) >= 1.3 (`curl -fsSL https://bun.sh/install | bash`)
 - [Docker](https://docs.docker.com/get-docker/) (для деплоя)
+- Telegram-бот — создаётся через [@BotFather](https://t.me/BotFather)
+- Supabase-проект — бесплатного тарифа хватит
 
-## Запуск локально
+## Быстрый старт
+
+### 1. Клонируй и установи зависимости
 
 ```bash
+git clone https://github.com/your-username/krysskaya_mem_bot.git
+cd krysskaya_mem_bot
 bun install
+```
+
+### 2. Создай `.env`
+
+```bash
+cp .env.example .env
+```
+
+Заполни все переменные (описание ниже).
+
+### 3. Подними Supabase
+
+Выполни SQL из раздела [Supabase](#supabase) в SQL Editor своего проекта.
+
+### 4. Запусти туннель
+
+Бот работает через webhook (без polling), поэтому Telegram должен достучаться до твоего localhost. Нужен туннель.
+
+Например через [tuna.am](https://tuna.am):
+
+```bash
+tuna http 3000
+```
+
+Полученный URL прописываешь в `WEBHOOK_URL` в `.env`.
+
+### 5. Запусти
+
+```bash
 bun run dev
 ```
 
+Админка будет доступна на `http://localhost:3000`.
+
 ## Env
 
-```env
-BOT_TOKEN=
-BOT_USERNAME=
-WEBHOOK_URL=
-SUPABASE_URL=
-SUPABASE_SERVICE_KEY=
-ADMIN_USER=
-ADMIN_PASS=
-WEB_PORT=3000
-```
+| Переменная | Описание | Пример |
+|---|---|---|
+| `BOT_TOKEN` | Токен от @BotFather | `123456:ABC-DEF...` |
+| `BOT_USERNAME` | Username бота без `@` | `krysskaya_mem_bot` |
+| `WEBHOOK_URL` | Внешний URL, куда Telegram шлёт апдейты | `https://your-domain.com` |
+| `SUPABASE_URL` | URL Supabase-проекта | `https://xxx.supabase.co` |
+| `SUPABASE_SERVICE_KEY` | Service Role ключ (не anon!) | `eyJhbGci...` |
+| `ADMIN_USER` | Логин для веб-админки | `admin` |
+| `ADMIN_PASS` | Пароль для веб-админки | `supersecret` |
+| `WEB_PORT` | Порт сервера (опционально) | `3000` |
+
+> **Важно:** используй именно `Service Role` ключ, не `anon`. Anon ключ не имеет прав на кастомные схемы.
 
 ## Supabase
 
-Бот использует кастомную схему `meme_bot`. SQL для инициализации:
+Бот использует кастомную схему `meme_bot`. Выполни этот SQL в SQL Editor:
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS meme_bot;
@@ -91,7 +130,7 @@ GRANT ALL ON meme_bot.memes TO service_role;
 GRANT ALL ON meme_bot.submissions TO service_role;
 ```
 
-Также создай Storage bucket `memes` в Supabase.
+Также создай **Storage bucket** с именем `memes` в Supabase Dashboard → Storage. Тип: private.
 
 ## Docker
 
@@ -117,3 +156,29 @@ src/
 └── lib/
     └── supabase.ts   # Клиент Supabase, CRUD
 ```
+
+## FAQ
+
+**Бот не отвечает на команды**
+Проверь что `WEBHOOK_URL` доступен извне. Открой `{WEBHOOK_URL}/webhook` в браузере — должен быть ответ (даже если ошибка). Если таймаут — туннель не работает или порт неправильный.
+
+**`permission denied for table`**
+Ты используешь `anon` ключ вместо `Service Role`, или не выполнил `GRANT` из SQL выше.
+
+**`bun: command not found`**
+Bun не установлен. Ставь: `curl -fsSL https://bun.sh/install | bash`, перезапусти терминал.
+
+**Админка просит логин/пароль**
+Это Basic Auth. Логин и пароль — из `ADMIN_USER` и `ADMIN_PASS` в `.env`.
+
+**Юзер кидает фото, но бот молчит**
+Бот принимает фото только в личных сообщениях. В группах фото игнорируются.
+
+**`frozen lockfile` ошибка при docker build**
+Файл `bun.lock` не закоммичен. Запусти `bun install` локально, закоммить `bun.lock`.
+
+**Мемы не грузятся в админке / битые картинки**
+Signed URL истекают через час. Перезагрузи страницу. Также проверь что Storage bucket `memes` создан в Supabase.
+
+**Как сменить порт**
+Поменяй `WEB_PORT` в `.env`. В Docker не забудь поменять маппинг: `-p НОВЫЙ_ПОРТ:НОВЫЙ_ПОРТ`.

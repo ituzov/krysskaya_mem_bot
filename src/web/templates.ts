@@ -465,6 +465,36 @@ export function layout(
       opacity: 1;
     }
 
+    /* Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.85);
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+    }
+
+    .lightbox.open {
+      display: flex;
+    }
+
+    .lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: var(--radius);
+      object-fit: contain;
+      cursor: default;
+    }
+
+    .meme-img-wrap {
+      cursor: pointer;
+    }
+
     /* Responsive */
     @media (max-width: 640px) {
       .main { padding: 1rem; }
@@ -609,6 +639,26 @@ export function layout(
       ${body}
     </div>
   </main>
+
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+  </div>
+
+  <script>
+    function openLightbox(src) {
+      const lb = document.getElementById('lightbox');
+      document.getElementById('lightbox-img').src = src;
+      lb.classList.add('open');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('open');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeLightbox();
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -621,7 +671,7 @@ export function memeRow(meme: {
 }) {
   const count = meme.send_count ?? 0;
   return `<div class="meme-card">
-    <div class="meme-img-wrap">
+    <div class="meme-img-wrap" onclick="openLightbox('${meme.signedUrl}')">
       <img src="${meme.signedUrl}" alt="${meme.name}" loading="lazy">
     </div>
     <div class="meme-info">
@@ -662,7 +712,7 @@ export function submissionRow(sub: {
 }) {
   const user = sub.username ? `@${sub.username}` : sub.first_name;
   return `<div class="sub-card">
-    <div class="meme-img-wrap">
+    <div class="meme-img-wrap" onclick="openLightbox('${sub.signedUrl}')">
       <img src="${sub.signedUrl}" alt="от ${user}" loading="lazy">
     </div>
     <div class="sub-info">

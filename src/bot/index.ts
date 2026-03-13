@@ -11,6 +11,27 @@ export const bot = new Bot(process.env.BOT_TOKEN!);
 
 const BOT_USERNAME = process.env.BOT_USERNAME!.toLowerCase();
 
+const LOADING_PHRASES = [
+  "🔍 Изучаю ваших бывших...",
+  "🌌 Анализирую расположение звёзд...",
+  "🐀 Опрашиваю крыс в подвале...",
+  "🧠 Подключаю нейросетку...",
+  "🎰 Кручу барабан мемов...",
+  "📡 Ловлю сигнал из космоса...",
+  "🔮 Консультируюсь с шаром...",
+  "🗂 Роюсь в архивах...",
+  "☕️ Завариваю чаёк...",
+  "🫡 Мем подобран!",
+];
+
+function pickLoadingSequence(): string[] {
+  const pool = LOADING_PHRASES.slice(0, -1);
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+  return [...shuffled.slice(0, 3), LOADING_PHRASES.at(-1)!];
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function sendRandomMeme(ctx: any) {
   const meme = await getRandomMeme();
 
@@ -22,6 +43,18 @@ async function sendRandomMeme(ctx: any) {
   const username = ctx.from?.username
     ? `@${ctx.from.username}`
     : ctx.from?.first_name ?? "аноним";
+
+  // Loading animation
+  const sequence = pickLoadingSequence();
+  const msg = await ctx.reply(sequence[0]);
+
+  for (let i = 1; i < sequence.length; i++) {
+    await sleep(1000);
+    await ctx.api.editMessageText(ctx.chat.id, msg.message_id, sequence[i]);
+  }
+
+  await sleep(500);
+  await ctx.api.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
 
   const buffer = await getMemeBuffer(meme.storage_path);
   await ctx.replyWithPhoto(new InputFile(buffer, meme.storage_path), {

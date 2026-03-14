@@ -3,6 +3,8 @@ import {
   getRandomMeme,
   getMemeBuffer,
   incrementSendCount,
+  markMemeSent,
+  upsertChat,
   addSubmission,
   supabase,
 } from "../lib/supabase";
@@ -33,7 +35,8 @@ function pickLoadingSequence(): string[] {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function sendRandomMeme(ctx: any) {
-  const meme = await getRandomMeme();
+  const chatId = ctx.chat.id;
+  const meme = await getRandomMeme(chatId);
 
   if (!meme) {
     await ctx.reply("У меня пока нет мемов 😢");
@@ -61,7 +64,12 @@ async function sendRandomMeme(ctx: any) {
     caption: `мем для крысски — ${username}`,
   });
 
-  await incrementSendCount(meme.id);
+  const chatTitle = ctx.chat.title ?? ctx.from?.first_name ?? "Личка";
+  await Promise.all([
+    incrementSendCount(meme.id),
+    markMemeSent(chatId, meme.id),
+    upsertChat(chatId, chatTitle, ctx.chat.type),
+  ]);
 }
 
 // /kek command — works in groups and DMs

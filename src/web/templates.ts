@@ -2,7 +2,8 @@ export function layout(
   body: string,
   memeCount: number,
   submissionsBody: string,
-  submissionCount: number
+  submissionCount: number,
+  chatStats: string
 ) {
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -495,6 +496,64 @@ export function layout(
       cursor: pointer;
     }
 
+    /* Chat stats */
+    .chat-stats {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .chat-stats h2 {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .chat-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .chat-table th {
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chat-table td {
+      padding: 0.625rem 0.75rem;
+      font-size: 0.85rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    }
+
+    .chat-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .chat-table .chat-type {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: var(--bg-card);
+      padding: 0.125rem 0.5rem;
+      border-radius: 100px;
+    }
+
+    .chat-table .chat-count {
+      font-family: 'Fira Code', monospace;
+      color: var(--accent);
+    }
+
     /* Responsive */
     @media (max-width: 640px) {
       .main { padding: 1rem; }
@@ -638,6 +697,8 @@ export function layout(
     <div class="meme-grid" id="meme-grid">
       ${body}
     </div>
+
+    ${chatStats}
   </main>
 
   <div class="lightbox" id="lightbox" onclick="closeLightbox()">
@@ -704,6 +765,19 @@ export function memeRows(
   return memes.map(memeRow).join("");
 }
 
+export function loadMoreButton(offset: number) {
+  return `<div
+    style="grid-column: 1 / -1; display: flex; justify-content: center; padding: 1rem 0;"
+  >
+    <button
+      class="btn btn-accent"
+      hx-get="/memes/page?offset=${offset}"
+      hx-target="closest div"
+      hx-swap="outerHTML"
+    >Загрузить ещё</button>
+  </div>`;
+}
+
 export function submissionRow(sub: {
   id: string;
   username: string | null;
@@ -747,4 +821,44 @@ export function submissionRows(
 ) {
   if (subs.length === 0) return "";
   return subs.map(submissionRow).join("");
+}
+
+export function chatStatsSection(
+  chats: { chat_id: number; title: string; type: string; memes_sent: number }[]
+) {
+  if (chats.length === 0) return "";
+
+  const typeLabels: Record<string, string> = {
+    private: "лс",
+    group: "группа",
+    supergroup: "группа",
+    channel: "канал",
+  };
+
+  const rows = chats
+    .map(
+      (c) => `<tr>
+        <td>${c.title}</td>
+        <td><span class="chat-type">${typeLabels[c.type] ?? c.type}</span></td>
+        <td class="chat-count">${c.memes_sent}</td>
+      </tr>`
+    )
+    .join("");
+
+  const total = chats.reduce((s, c) => s + c.memes_sent, 0);
+
+  return `
+    <div class="chat-stats" style="margin-top: 2rem;">
+      <h2>Чаты — ${chats.length} шт., ${total} мемов отправлено</h2>
+      <table class="chat-table">
+        <thead>
+          <tr>
+            <th>Чат</th>
+            <th>Тип</th>
+            <th>Мемов</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }

@@ -6,30 +6,90 @@ export const supabase = createClient(
   { db: { schema: "meme_bot" } }
 );
 
-export async function getRandomMeme() {
-  // Postgres ORDER BY random() — one row, no full scan
-  const { data, error } = await supabase.rpc("get_random_meme");
-  if (error || !data) return null;
-  return data;
+export async function getRandomMeme(chatId?: number) {
+  if (!chatId) {
+    const { data, error } = await supabase.rpc("get_random_meme");
+    if (error || !data) return null;
+    return data;
+  }
+
+  // Get unseen meme for this chat
+  const { data, error } = await supabase.rpc("get_random_unseen_meme", {
+    p_chat_id: chatId,
+  });
+
+  if (!error && data) return data;
+
+  // All memes seen — reset and start over
+  await supabase.from("chat_meme_history").delete().eq("chat_id", chatId);
+  const { data: fresh, error: freshErr } = await supabase.rpc("get_random_meme");
+  if (freshErr || !fresh) return null;
+  return fresh;
+}
+
+export async function markMemeSent(chatId: number, memeId: string) {
+  await supabase
+    .from("chat_meme_history")
+    .upsert({ chat_id: chatId, meme_id: memeId });
+}
+
+export async function upsertChat(chatId: number, title: string, type: string) {
+  await supabase.from("chats").upsert({
+    chat_id: chatId,
+    title,
+    type,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function getChatStats() {
+  const { data: chats } = await supabase
+    .from("chats")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (!chats || chats.length === 0) return [];
+
+  const { data: counts } = await supabase
+    .from("chat_meme_history")
+    .select("chat_id")
+    .in("chat_id", chats.map((c) => c.chat_id));
+
+  const countMap: Record<number, number> = {};
+  for (const row of counts ?? []) {
+    countMap[row.chat_id] = (countMap[row.chat_id] ?? 0) + 1;
+  }
+
+  return chats.map((c) => ({
+    ...c,
+    memes_sent: countMap[c.chat_id] ?? 0,
+  }));
 }
 
 export async function incrementSendCount(id: string) {
   await supabase.rpc("increment_send_count", { meme_id: id });
 }
 
-export async function getAllMemes() {
+export const MEMES_PER_PAGE = 30;
+
+export async function getMemesCount() {
+  const { count } = await supabase
+    .from("memes")
+    .select("*", { count: "exact", head: true });
+  return count ?? 0;
+}
+
+export async function getMemesPage(offset = 0, limit = MEMES_PER_PAGE) {
   const { data } = await supabase
     .from("memes")
     .select("*")
-    .order("created_at", { ascending: false });
-  return data ?? [];
-}
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
 
-export async function getAllMemesWithUrls() {
-  const memes = await getAllMemes();
+  const memes = data ?? [];
   if (memes.length === 0) return [];
 
-  const { data } = await supabase.storage
+  const { data: urls } = await supabase.storage
     .from("memes")
     .createSignedUrls(
       memes.map((m) => m.storage_path),
@@ -38,7 +98,7 @@ export async function getAllMemesWithUrls() {
 
   return memes.map((m, i) => ({
     ...m,
-    signedUrl: data?.[i]?.signedUrl ?? "",
+    signedUrl: urls?.[i]?.signedUrl ?? "",
   }));
 }
 

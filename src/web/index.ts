@@ -3,14 +3,17 @@ import { basicAuth } from "hono/basic-auth";
 import { webhookCallback } from "grammy";
 import { bot } from "../bot";
 import {
-  getAllMemesWithUrls,
+  getMemesPage,
+  getMemesCount,
+  MEMES_PER_PAGE,
   addMeme,
   deleteMeme,
   getAllSubmissions,
   approveSubmission,
   rejectSubmission,
+  getChatStats,
 } from "../lib/supabase";
-import { layout, memeRows, submissionRows } from "./templates";
+import { layout, memeRows, loadMoreButton, submissionRows, chatStatsSection } from "./templates";
 
 export const app = new Hono();
 
@@ -28,13 +31,32 @@ app.use(
 
 // Web panel — main page
 app.get("/", async (c) => {
-  const [memes, submissions] = await Promise.all([
-    getAllMemesWithUrls(),
+  const [memes, total, submissions, chats] = await Promise.all([
+    getMemesPage(0),
+    getMemesCount(),
     getAllSubmissions(),
+    getChatStats(),
   ]);
+  const hasMore = total > MEMES_PER_PAGE;
   return c.html(
-    layout(memeRows(memes), memes.length, submissionRows(submissions), submissions.length)
+    layout(
+      memeRows(memes) + (hasMore ? loadMoreButton(MEMES_PER_PAGE) : ""),
+      total,
+      submissionRows(submissions),
+      submissions.length,
+      chatStatsSection(chats)
+    )
   );
+});
+
+// Load more memes (HTMX)
+app.get("/memes/page", async (c) => {
+  const offset = Number(c.req.query("offset")) || 0;
+  const total = await getMemesCount();
+  const memes = await getMemesPage(offset);
+  const nextOffset = offset + MEMES_PER_PAGE;
+  const hasMore = nextOffset < total;
+  return c.html(memeRows(memes) + (hasMore ? loadMoreButton(nextOffset) : ""));
 });
 
 // Upload single meme
@@ -47,8 +69,9 @@ app.post("/memes", async (c) => {
 
   await addMeme(name, file);
 
-  const memes = await getAllMemesWithUrls();
-  return c.html(memeRows(memes));
+  const [memes, total] = await Promise.all([getMemesPage(0), getMemesCount()]);
+  const hasMore = total > MEMES_PER_PAGE;
+  return c.html(memeRows(memes) + (hasMore ? loadMoreButton(MEMES_PER_PAGE) : ""));
 });
 
 // Bulk upload memes
@@ -68,8 +91,9 @@ app.post("/memes/bulk", async (c) => {
     } catch {}
   }
 
-  const memes = await getAllMemesWithUrls();
-  return c.html(memeRows(memes));
+  const [memes, total] = await Promise.all([getMemesPage(0), getMemesCount()]);
+  const hasMore = total > MEMES_PER_PAGE;
+  return c.html(memeRows(memes) + (hasMore ? loadMoreButton(MEMES_PER_PAGE) : ""));
 });
 
 // Delete meme

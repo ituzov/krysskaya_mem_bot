@@ -33,6 +33,38 @@ export async function markMemeSent(chatId: number, memeId: string) {
     .upsert({ chat_id: chatId, meme_id: memeId });
 }
 
+export async function getTodayMeme(userId: number, chatId: number) {
+  const today = new Date().toISOString().split("T")[0]; // UTC date
+
+  const { data } = await supabase
+    .from("daily_memes")
+    .select("meme_id")
+    .eq("user_id", userId)
+    .eq("chat_id", chatId)
+    .eq("date", today)
+    .single();
+
+  if (!data) return null;
+
+  const { data: meme } = await supabase
+    .from("memes")
+    .select("*")
+    .eq("id", data.meme_id)
+    .single();
+
+  return meme;
+}
+
+export async function saveDailyMeme(userId: number, chatId: number, memeId: string) {
+  const today = new Date().toISOString().split("T")[0];
+  await supabase.from("daily_memes").upsert({
+    user_id: userId,
+    chat_id: chatId,
+    meme_id: memeId,
+    date: today,
+  });
+}
+
 export async function upsertChat(chatId: number, title: string, type: string) {
   await supabase.from("chats").upsert({
     chat_id: chatId,

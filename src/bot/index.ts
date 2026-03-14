@@ -5,6 +5,8 @@ import {
   incrementSendCount,
   markMemeSent,
   upsertChat,
+  getTodayMeme,
+  saveDailyMeme,
   addSubmission,
   supabase,
 } from "../lib/supabase";
@@ -36,7 +38,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function sendRandomMeme(ctx: any) {
   const chatId = ctx.chat.id;
-  const meme = await getRandomMeme(chatId);
+  const userId = ctx.from?.id;
+
+  // Check if user already got a meme today in this chat
+  const existing = await getTodayMeme(userId, chatId);
+
+  const meme = existing ?? await getRandomMeme(chatId);
 
   if (!meme) {
     await ctx.reply("У меня пока нет мемов 😢");
@@ -61,15 +68,20 @@ async function sendRandomMeme(ctx: any) {
 
   const buffer = await getMemeBuffer(meme.storage_path);
   await ctx.replyWithPhoto(new InputFile(buffer, meme.storage_path), {
-    caption: `мем для крысски — ${username}`,
+    caption: existing
+      ? `${username}, ты уже получал мем сегодня 🐀`
+      : `мем для крысски — ${username}`,
   });
 
-  const chatTitle = ctx.chat.title ?? ctx.from?.first_name ?? "Личка";
-  await Promise.all([
-    incrementSendCount(meme.id),
-    markMemeSent(chatId, meme.id),
-    upsertChat(chatId, chatTitle, ctx.chat.type),
-  ]);
+  if (!existing) {
+    const chatTitle = ctx.chat.title ?? ctx.from?.first_name ?? "Личка";
+    await Promise.all([
+      incrementSendCount(meme.id),
+      markMemeSent(chatId, meme.id),
+      saveDailyMeme(userId, chatId, meme.id),
+      upsertChat(chatId, chatTitle, ctx.chat.type),
+    ]);
+  }
 }
 
 // /kek command — works in groups and DMs

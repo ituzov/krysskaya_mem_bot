@@ -18,7 +18,13 @@ import { layout, memeRows, loadMoreButton, submissionRows, chatStatsSection } fr
 export const app = new Hono();
 
 // Telegram webhook — no auth
-app.post("/webhook", webhookCallback(bot, "hono"));
+app.post(
+  "/webhook",
+  webhookCallback(bot, "hono", {
+    timeoutMilliseconds: 30_000,
+    onTimeout: "return",
+  })
+);
 
 // Basic auth on everything else
 app.use(

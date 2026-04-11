@@ -1,6 +1,6 @@
 import { Bot, InputFile } from "grammy";
-import { fetch as undiciFetch } from "undici";
-import { socksDispatcher } from "fetch-socks";
+import net from "node:net";
+import { SocksClient } from "socks";
 import {
   getRandomMeme,
   getMemeBuffer,
@@ -15,26 +15,76 @@ import {
 
 const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 
-if (TELEGRAM_PROXY?.startsWith("socks5://")) {
-  const u = new URL(TELEGRAM_PROXY);
-  const dispatcher = socksDispatcher({
-    type: 5,
+async function startSocks5HttpBridge(socksUrl: string): Promise<string> {
+  const u = new URL(socksUrl);
+  const upstream = {
     host: u.hostname,
     port: Number(u.port),
+    type: 5 as const,
     userId: decodeURIComponent(u.username),
     password: decodeURIComponent(u.password),
+  };
+
+  return new Promise((resolve) => {
+    const server = net.createServer((client) => {
+      let handshake = false;
+      let buffered = Buffer.alloc(0);
+      let tun: net.Socket | null = null;
+
+      client.on("data", async (chunk) => {
+        if (handshake && tun) { tun.write(chunk); return; }
+        buffered = Buffer.concat([buffered, chunk]);
+        const headerEnd = buffered.indexOf("\r\n\r\n");
+        if (headerEnd === -1) return;
+
+        const head = buffered.slice(0, headerEnd).toString();
+        const m = head.match(/^CONNECT ([^:\s]+):(\d+) /);
+        handshake = true;
+        if (!m) { client.end("HTTP/1.1 400 Bad Request\r\n\r\n"); return; }
+        const [, host, portStr] = m;
+
+        try {
+          const { socket } = await SocksClient.createConnection({
+            proxy: upstream,
+            command: "connect",
+            destination: { host, port: Number(portStr) },
+          });
+          tun = socket;
+          client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+          const leftover = buffered.slice(headerEnd + 4);
+          if (leftover.length) tun.write(leftover);
+          tun.on("data", (d) => client.write(d));
+          tun.on("end", () => client.end());
+          tun.on("error", () => client.destroy());
+        } catch {
+          client.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+        }
+      });
+
+      client.on("close", () => tun?.destroy());
+      client.on("error", () => tun?.destroy());
+    });
+
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as net.AddressInfo;
+      resolve(`http://127.0.0.1:${port}`);
+    });
   });
-  const origFetch = globalThis.fetch;
-  globalThis.fetch = ((input: any, init: any = {}) => {
-    const url = typeof input === "string" ? input : (input?.url ?? String(input));
-    if (typeof url === "string" && url.startsWith("https://api.telegram.org/")) {
-      return undiciFetch(url, { ...init, dispatcher }) as any;
-    }
-    return origFetch(input, init);
-  }) as any;
 }
 
-export const bot = new Bot(process.env.BOT_TOKEN!);
+let botProxy: string | undefined;
+if (TELEGRAM_PROXY?.startsWith("socks5://")) {
+  botProxy = await startSocks5HttpBridge(TELEGRAM_PROXY);
+  console.log(`🧦 SOCKS5 bridge: ${botProxy}`);
+} else if (TELEGRAM_PROXY) {
+  botProxy = TELEGRAM_PROXY;
+}
+
+export const bot = new Bot(process.env.BOT_TOKEN!, botProxy ? {
+  client: {
+    baseFetchConfig: { proxy: botProxy } as any,
+  },
+} : undefined);
 
 const BOT_USERNAME = process.env.BOT_USERNAME!.toLowerCase();
 

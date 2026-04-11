@@ -176,6 +176,14 @@ export async function getMemeBuffer(storagePath: string) {
   return Buffer.from(await data.arrayBuffer());
 }
 
+export async function getMemeSignedUrl(storagePath: string) {
+  const { data, error } = await supabase.storage
+    .from("memes")
+    .createSignedUrl(storagePath, 60 * 60);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
 // --- Submissions ---
 
 export async function addSubmission(

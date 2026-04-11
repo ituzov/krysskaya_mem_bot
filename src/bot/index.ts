@@ -1,6 +1,7 @@
 import { Bot, InputFile } from "grammy";
 import net from "node:net";
 import { SocksClient } from "socks";
+import { fetch as undiciFetch, ProxyAgent } from "undici";
 import {
   getRandomMeme,
   getMemeBuffer,
@@ -96,11 +97,23 @@ if (TELEGRAM_PROXY?.startsWith("socks5://")) {
   botProxy = TELEGRAM_PROXY;
 }
 
-export const bot = new Bot(process.env.BOT_TOKEN!, botProxy ? {
-  client: {
-    baseFetchConfig: { proxy: botProxy } as any,
-  },
-} : undefined);
+if (botProxy) {
+  const proxyAgent = new ProxyAgent(botProxy);
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = ((input: any, init: any = {}) => {
+    const url = typeof input === "string" ? input : (input?.url ?? String(input));
+    if (typeof url === "string" && url.startsWith("https://api.telegram.org/")) {
+      return undiciFetch(url, { ...init, dispatcher: proxyAgent }) as any;
+    }
+    return origFetch(input, init);
+  }) as any;
+}
+
+export const bot = new Bot(process.env.BOT_TOKEN!);
+
+bot.catch((err) => {
+  console.error(`Bot error in update ${err.ctx.update.update_id}:`, err.error);
+});
 
 const BOT_USERNAME = process.env.BOT_USERNAME!.toLowerCase();
 

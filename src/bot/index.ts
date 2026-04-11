@@ -1,4 +1,6 @@
 import { Bot, InputFile } from "grammy";
+import { fetch as undiciFetch } from "undici";
+import { socksDispatcher } from "fetch-socks";
 import {
   getRandomMeme,
   getMemeBuffer,
@@ -13,11 +15,26 @@ import {
 
 const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
 
-export const bot = new Bot(process.env.BOT_TOKEN!, TELEGRAM_PROXY ? {
-  client: {
-    baseFetchConfig: { proxy: TELEGRAM_PROXY } as any,
-  },
-} : undefined);
+if (TELEGRAM_PROXY?.startsWith("socks5://")) {
+  const u = new URL(TELEGRAM_PROXY);
+  const dispatcher = socksDispatcher({
+    type: 5,
+    host: u.hostname,
+    port: Number(u.port),
+    userId: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+  });
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = ((input: any, init: any = {}) => {
+    const url = typeof input === "string" ? input : (input?.url ?? String(input));
+    if (typeof url === "string" && url.startsWith("https://api.telegram.org/")) {
+      return undiciFetch(url, { ...init, dispatcher }) as any;
+    }
+    return origFetch(input, init);
+  }) as any;
+}
+
+export const bot = new Bot(process.env.BOT_TOKEN!);
 
 const BOT_USERNAME = process.env.BOT_USERNAME!.toLowerCase();
 
@@ -116,7 +133,7 @@ bot.on("message:photo", async (ctx) => {
     const file = await ctx.api.getFile(fileId);
     const url = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
 
-    const response = await fetch(url, TELEGRAM_PROXY ? ({ proxy: TELEGRAM_PROXY } as any) : undefined);
+    const response = await fetch(url);
     const buffer = Buffer.from(await response.arrayBuffer());
 
     const ext = (file.file_path?.split(".").pop() ?? "jpg").toLowerCase();

@@ -11,7 +11,13 @@ import {
   supabase,
 } from "../lib/supabase";
 
-export const bot = new Bot(process.env.BOT_TOKEN!);
+const TELEGRAM_PROXY = process.env.TELEGRAM_PROXY;
+
+export const bot = new Bot(process.env.BOT_TOKEN!, TELEGRAM_PROXY ? {
+  client: {
+    baseFetchConfig: { proxy: TELEGRAM_PROXY } as any,
+  },
+} : undefined);
 
 const BOT_USERNAME = process.env.BOT_USERNAME!.toLowerCase();
 
@@ -110,7 +116,7 @@ bot.on("message:photo", async (ctx) => {
     const file = await ctx.api.getFile(fileId);
     const url = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, TELEGRAM_PROXY ? ({ proxy: TELEGRAM_PROXY } as any) : undefined);
     const buffer = Buffer.from(await response.arrayBuffer());
 
     const ext = file.file_path?.split(".").pop() ?? "jpg";

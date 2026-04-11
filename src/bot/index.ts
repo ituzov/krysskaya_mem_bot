@@ -119,13 +119,14 @@ bot.on("message:photo", async (ctx) => {
     const response = await fetch(url, TELEGRAM_PROXY ? ({ proxy: TELEGRAM_PROXY } as any) : undefined);
     const buffer = Buffer.from(await response.arrayBuffer());
 
-    const ext = file.file_path?.split(".").pop() ?? "jpg";
+    const ext = (file.file_path?.split(".").pop() ?? "jpg").toLowerCase();
+    const mimeExt = ext === "jpg" ? "jpeg" : ext;
     const storagePath = `submissions/${crypto.randomUUID()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("memes")
       .upload(storagePath, buffer, {
-        contentType: `image/${ext}`,
+        contentType: `image/${mimeExt}`,
       });
 
     if (uploadError) throw uploadError;

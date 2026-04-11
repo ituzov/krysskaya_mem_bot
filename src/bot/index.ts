@@ -27,42 +27,58 @@ async function startSocks5HttpBridge(socksUrl: string): Promise<string> {
 
   return new Promise((resolve) => {
     const server = net.createServer((client) => {
-      let handshake = false;
       let buffered = Buffer.alloc(0);
-      let tun: net.Socket | null = null;
 
-      client.on("data", async (chunk) => {
-        if (handshake && tun) { tun.write(chunk); return; }
+      const onData = async (chunk: Buffer) => {
         buffered = Buffer.concat([buffered, chunk]);
         const headerEnd = buffered.indexOf("\r\n\r\n");
         if (headerEnd === -1) return;
 
+        client.removeListener("data", onData);
+        client.pause();
+
         const head = buffered.slice(0, headerEnd).toString();
         const m = head.match(/^CONNECT ([^:\s]+):(\d+) /);
-        handshake = true;
         if (!m) { client.end("HTTP/1.1 400 Bad Request\r\n\r\n"); return; }
         const [, host, portStr] = m;
 
         try {
-          const { socket } = await SocksClient.createConnection({
+          const { socket: tun } = await SocksClient.createConnection({
             proxy: upstream,
             command: "connect",
             destination: { host, port: Number(portStr) },
           });
-          tun = socket;
+
           client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+
           const leftover = buffered.slice(headerEnd + 4);
           if (leftover.length) tun.write(leftover);
-          tun.on("data", (d) => client.write(d));
-          tun.on("end", () => client.end());
-          tun.on("error", () => client.destroy());
-        } catch {
+
+          client.pipe(tun);
+          tun.pipe(client);
+
+          const onClientError = (err: Error) => {
+            console.error(`[bridge] client error ${host}:${portStr}:`, err.message);
+            tun.destroy();
+          };
+          const onTunError = (err: Error) => {
+            console.error(`[bridge] tun error ${host}:${portStr}:`, err.message);
+            client.destroy();
+          };
+          client.on("error", onClientError);
+          tun.on("error", onTunError);
+          client.on("close", () => tun.destroy());
+          tun.on("close", () => client.destroy());
+        } catch (e: any) {
+          console.error(`[bridge] socks5 connect failed ${host}:${portStr}:`, e?.message);
           client.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
         }
-      });
+      };
 
-      client.on("close", () => tun?.destroy());
-      client.on("error", () => tun?.destroy());
+      client.on("data", onData);
+      client.on("error", (err) => {
+        console.error("[bridge] client pre-tunnel error:", err.message);
+      });
     });
 
     server.listen(0, "127.0.0.1", () => {

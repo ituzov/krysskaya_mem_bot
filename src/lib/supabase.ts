@@ -18,12 +18,14 @@ export async function getRandomMeme(chatId?: number) {
     p_chat_id: chatId,
   });
 
-  if (!error && data) return data;
+  // SQL function with composite return type yields a row of NULLs when no
+  // rows match — check id, not the wrapper object.
+  if (!error && data?.id) return data;
 
   // All memes seen — reset and start over
   await supabase.from("chat_meme_history").delete().eq("chat_id", chatId);
   const { data: fresh, error: freshErr } = await supabase.rpc("get_random_meme");
-  if (freshErr || !fresh) return null;
+  if (freshErr || !fresh?.id) return null;
   return fresh;
 }
 

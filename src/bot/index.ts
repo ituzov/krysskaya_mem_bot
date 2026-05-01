@@ -1,7 +1,7 @@
-import { Bot, InputFile } from "grammy";
+import { Bot } from "grammy";
 import {
   getRandomMeme,
-  getMemeBuffer,
+  getMemeSignedUrl,
   incrementSendCount,
   markMemeSent,
   upsertChat,
@@ -70,8 +70,8 @@ async function sendRandomMeme(ctx: any) {
   await sleep(500);
   await ctx.api.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {});
 
-  const buffer = await getMemeBuffer(meme.storage_path);
-  await ctx.replyWithPhoto(new InputFile(buffer, meme.storage_path), {
+  const photoUrl = await getMemeSignedUrl(meme.storage_path);
+  await ctx.replyWithPhoto(photoUrl, {
     caption: existing
       ? `${username}, ты уже получал мем сегодня 🐀`
       : `мем для крысски — ${username}`,

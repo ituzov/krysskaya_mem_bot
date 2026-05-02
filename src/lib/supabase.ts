@@ -170,12 +170,12 @@ export async function deleteMeme(id: string) {
   await supabase.from("memes").delete().eq("id", id);
 }
 
-export async function getMemeSignedUrl(storagePath: string) {
+export async function getMemeBuffer(storagePath: string) {
   const { data, error } = await supabase.storage
     .from("memes")
-    .createSignedUrl(storagePath, 60 * 60);
+    .download(storagePath);
   if (error) throw error;
-  return data.signedUrl;
+  return Buffer.from(await data.arrayBuffer());
 }
 
 // --- Submissions ---
